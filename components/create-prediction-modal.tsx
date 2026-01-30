@@ -142,14 +142,16 @@ export default function CreatePredictionModal({
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit, (errors) => {
-            // Handle validation errors
-            if (errors.description?.message) {
-              toast.error(errors.description.message)
-            } else if (errors.durationHours?.message) {
-              toast.error(errors.durationHours.message)
-            }
-          })} className="space-y-4">
+          <form 
+            onSubmit={async (e) => {
+              e.preventDefault()
+              const isValid = await form.trigger()
+              if (isValid) {
+                form.handleSubmit(onSubmit)(e)
+              }
+            }} 
+            className="space-y-4"
+          >
             <FormField
               control={form.control}
               name="description"

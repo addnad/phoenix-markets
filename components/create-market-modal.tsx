@@ -188,14 +188,16 @@ export default function CreateMarketModal({
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit, (errors) => {
-            // Handle validation errors
-            if (errors.description?.message) {
-              toast.error(errors.description.message)
-            } else if (errors.durationDays?.message) {
-              toast.error(errors.durationDays.message)
-            }
-          })} className="space-y-6">
+          <form 
+            onSubmit={async (e) => {
+              e.preventDefault()
+              const isValid = await form.trigger()
+              if (isValid) {
+                form.handleSubmit(onSubmit)(e)
+              }
+            }} 
+            className="space-y-6"
+          >
             {/* Description Field */}
             <FormField
               control={form.control}
