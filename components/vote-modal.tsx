@@ -18,6 +18,7 @@ import { formatDistanceToNowStrict } from 'date-fns'
 import { toast } from 'sonner'
 import PermitModal from './permit-modal'
 import { usePermit } from '@/hooks/usePermit'
+import { useCofheClient } from '@/hooks/useCofheClient'
 import { WalletClient } from 'wagmi'
 
 interface VoteModalProps {
@@ -36,6 +37,7 @@ export default function VoteModal({
   endTime,
 }: VoteModalProps) {
   const { address, isConnected } = useAccount()
+  const { cofhe, isReady: cofheReady } = useCofheClient()
   const [selectedVote, setSelectedVote] = useState<'yes' | 'no' | null>(null)
   const [isEncrypting, setIsEncrypting] = useState(false)
   const [encryptedPreview, setEncryptedPreview] = useState<string | null>(null)
@@ -68,42 +70,16 @@ export default function VoteModal({
       return
     }
 
+    // Check if CofheClient is ready
+    if (!cofheReady || !cofhe) {
+      toast.error('CoFHE not ready. Opening privacy setup...')
+      setPermitModalOpen(true)
+      return
+    }
+
     try {
       setIsEncrypting(true)
-
-      // Check if permit exists
-      const permitExists = await checkPermit()
-      if (!permitExists) {
-        setIsEncrypting(false)
-        setPermitModalOpen(true)
-        return
-      }
-
       const encryptToastId = toast.loading('Encrypting your private vote...')
-
-      // Check wallet client has signer capability
-      if (!walletClient || !walletClient.account) {
-        toast.dismiss(encryptToastId)
-        toast.error('Wallet not connected or no signer. Reconnect MetaMask.')
-        setIsEncrypting(false)
-        return
-      }
-
-      // Initialize CofheClient with walletClient (must have signer)
-      let cofhe
-      try {
-        const { CofheClient } = await import('cofhejs')
-        cofhe = await CofheClient.init({
-          provider: walletClient,
-          chainId: 11155111, // Sepolia
-        })
-      } catch (clientError) {
-        console.log('[v0] CofheClient initialization error:', clientError)
-        toast.dismiss(encryptToastId)
-        toast.error('Failed to initialize encryption. Activate CoFHE permit via Fhenix testnet dashboard.')
-        setIsEncrypting(false)
-        return
-      }
 
       // Encrypt the vote (1 for yes, 0 for no)
       let encryptedChoice
@@ -113,7 +89,7 @@ export default function VoteModal({
       } catch (encryptError) {
         console.log('[v0] Encryption error:', encryptError)
         toast.dismiss(encryptToastId)
-        toast.error('Encryption failed. If FHE ops fail, activate CoFHE permit via Fhenix testnet dashboard.')
+        toast.error('Encryption failed. Try activating CoFHE permit again.')
         setIsEncrypting(false)
         return
       }
@@ -137,57 +113,20 @@ export default function VoteModal({
           onSuccess: () => {
             toast.dismiss(submitToastId)
             toast.success('Private vote cast successfully!')
-            setTimeout(() => {
-              onOpenChange(false)
-              setSelectedVote(null)
-              setEncryptedPreview(null)
-            }, 1500)
           },
           onError: (error) => {
             toast.dismiss(submitToastId)
             const errorMsg = error?.message || 'Failed to submit vote'
-            if (errorMsg.includes('CoFHE') || errorMsg.includes('permit')) {
-              toast.error('CoFHE permit required. Activate via Fhenix testnet dashboard.')
-            } else {
-              toast.error(errorMsg)
-            }
-            console.log('[v0] Contract write error:', error)
+            toast.error(errorMsg)
+            console.log('[v0] Contract error:', error)
           },
         }
       )
-    } catch (error) {
-      toast.dismiss()
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-      console.error('[v0] Vote handler error:', error)
-
-      if (errorMessage.includes('web3') || errorMessage.includes('provider')) {
-        toast.error('Provider error. Ensure wallet is connected to Sepolia network.')
-      } else if (errorMessage.includes('CoFHE') || errorMessage.includes('permit')) {
-        toast.error('CoFHE permit required. Activate via Fhenix testnet dashboard.')
-      } else {
-        toast.error(`Vote error: ${errorMessage}`)
-      }
-    } finally {
+    } catch (err) {
+      console.log('[v0] Vote handler error:', err)
+      toast.error('Vote submission failed. Please try again.')
       setIsEncrypting(false)
     }
-  }
-
-  if (!isConnected) {
-    return (
-      <Dialog open={isOpen} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-md border-orange-900/20 bg-slate-950/95 backdrop-blur">
-          <DialogHeader>
-            <DialogTitle className="text-xl">Connect Wallet to Vote</DialogTitle>
-          </DialogHeader>
-          <div className="text-center py-8">
-            <Wallet className="w-12 h-12 text-orange-500 mx-auto mb-4" />
-            <p className="text-muted-foreground mb-6">
-              Please connect your wallet to participate in this prediction market
-            </p>
-          </div>
-        </DialogContent>
-      </Dialog>
-    )
   }
 
   return (

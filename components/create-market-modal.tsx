@@ -201,13 +201,7 @@ export default function CreateMarketModal({
 
         <Form {...form}>
           <form 
-            onSubmit={async (e) => {
-              e.preventDefault()
-              const isValid = await form.trigger()
-              if (isValid) {
-                form.handleSubmit(onSubmit)(e)
-              }
-            }} 
+            onSubmit={form.handleSubmit(onSubmit)}
             className="space-y-6"
           >
             {/* Description Field */}
@@ -316,14 +310,5 @@ export default function CreateMarketModal({
         )}
       </DialogContent>
     </Dialog>
-    {/* Permit Modal */}
-    <PermitModal
-      isOpen={permitModalOpen}
-      onOpenChange={setPermitModalOpen}
-      onPermitGenerated={() => {
-        // Retry form submission after permit is generated
-        form.handleSubmit(onSubmit)()
-      }}
-    />
   )
 }

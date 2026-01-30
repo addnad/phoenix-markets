@@ -143,13 +143,7 @@ export default function CreatePredictionModal({
 
         <Form {...form}>
           <form 
-            onSubmit={async (e) => {
-              e.preventDefault()
-              const isValid = await form.trigger()
-              if (isValid) {
-                form.handleSubmit(onSubmit)(e)
-              }
-            }} 
+            onSubmit={form.handleSubmit(onSubmit)}
             className="space-y-4"
           >
             <FormField
