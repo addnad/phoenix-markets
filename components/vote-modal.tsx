@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useWriteContract, useWaitForTransactionReceipt, usePublicClient, useAccount, useWalletClient } from 'wagmi'
+import { useWriteContract, useWaitForTransactionReceipt, useAccount, usePublicClient, useWalletClient } from 'wagmi'
 import {
   Dialog,
   DialogContent,
@@ -36,8 +36,6 @@ export default function VoteModal({
   const [selectedVote, setSelectedVote] = useState<'yes' | 'no' | null>(null)
   const [isEncrypting, setIsEncrypting] = useState(false)
   const [encryptedPreview, setEncryptedPreview] = useState<string | null>(null)
-  const publicClient = usePublicClient()
-  const { data: walletClient } = useWalletClient()
   const { writeContract, isPending, data: hash } = useWriteContract()
   const { isLoading: isWaiting, isSuccess } = useWaitForTransactionReceipt({
     hash,
@@ -49,10 +47,12 @@ export default function VoteModal({
 
   useEffect(() => {
     if (isSuccess) {
-      toast.success('Vote submitted successfully!')
-      onOpenChange(false)
-      setSelectedVote(null)
-      setEncryptedPreview(null)
+      toast.success('Private vote cast successfully!')
+      setTimeout(() => {
+        onOpenChange(false)
+        setSelectedVote(null)
+        setEncryptedPreview(null)
+      }, 500)
     }
   }, [isSuccess, onOpenChange])
 
@@ -64,97 +64,92 @@ export default function VoteModal({
 
     try {
       setIsEncrypting(true)
-      const toastId = toast.loading('Encrypting your vote...')
+      const encryptToastId = toast.loading('Encrypting your private vote...')
 
-      // Dynamic import to handle FhenixJS
-      const FhenixClient = (await import('fhenixjs')).FhenixClient
-
-      // Try to use wallet client first, fall back to public client
-      const provider = walletClient || publicClient
-      
-      if (!provider) {
-        toast.dismiss(toastId)
-        toast.error('Failed to initialize provider. Please ensure your wallet is connected to Sepolia network.')
+      // Get window.ethereum for FhenixClient
+      if (typeof window === 'undefined' || !window.ethereum) {
+        toast.dismiss(encryptToastId)
+        toast.error('Web3 provider not available. Please ensure MetaMask or similar wallet extension is installed.')
         setIsEncrypting(false)
         return
       }
 
-      // Initialize FhenixClient - pass transport config if available
+      // Dynamic import to handle FhenixJS
+      const { FhenixClient } = await import('fhenixjs')
+
+      // Initialize FhenixClient with window.ethereum
       let fheClient
       try {
-        // Try initializing with the provider/client directly
-        fheClient = new FhenixClient({
-          publicClient: provider,
-        })
-      } catch (initError1) {
-        console.log('[v0] FhenixClient init attempt 1 failed, trying alternative:', initError1)
-        try {
-          // Try with direct provider reference
-          fheClient = new FhenixClient({
-            provider: provider as any,
-          })
-        } catch (initError2) {
-          console.log('[v0] FhenixClient init attempt 2 failed, trying minimal config:', initError2)
-          try {
-            // Try minimal initialization
-            fheClient = new FhenixClient()
-          } catch (initError3) {
-            toast.dismiss(toastId)
-            console.error('[v0] All FhenixClient initialization attempts failed:', {
-              attempt1: initError1,
-              attempt2: initError2,
-              attempt3: initError3,
-            })
-            toast.error('Failed to initialize encryption. Ensure you are on Sepolia network and CoFHE is configured.')
-            setIsEncrypting(false)
-            return
-          }
-        }
+        fheClient = new FhenixClient({ provider: window.ethereum })
+      } catch (clientError) {
+        console.log('[v0] FhenixClient initialization error:', clientError)
+        toast.dismiss(encryptToastId)
+        toast.error('Failed to initialize encryption. Activate CoFHE permit via Fhenix testnet dashboard.')
+        setIsEncrypting(false)
+        return
       }
 
       // Encrypt the vote (1 for yes, 0 for no)
-      const encryptedChoice = fheClient.encrypt_uint32(selectedVote === 'yes' ? 1 : 0)
-      setEncryptedPreview(`0x${Math.random().toString(16).slice(2, 10)}...`)
+      let encryptedChoice
+      try {
+        encryptedChoice = await fheClient.encrypt_uint32(selectedVote === 'yes' ? 1 : 0)
+      } catch (encryptError) {
+        console.log('[v0] Encryption error:', encryptError)
+        toast.dismiss(encryptToastId)
+        toast.error('Encryption failed. If FHE ops fail, activate CoFHE permit via Fhenix testnet dashboard.')
+        setIsEncrypting(false)
+        return
+      }
 
-      toast.dismiss(toastId)
-      const voteToastId = toast.loading('Submitting encrypted vote to blockchain...')
+      // Show encrypted preview
+      const previewStr = encryptedChoice.toString ? encryptedChoice.toString() : String(encryptedChoice)
+      setEncryptedPreview(`${previewStr.substring(0, 10)}...`)
 
+      toast.dismiss(encryptToastId)
+      const submitToastId = toast.loading('Submitting private vote to blockchain...')
+
+      // Submit encrypted vote to contract
       writeContract(
         {
           address: CONTRACT_ADDRESS,
           abi: PREDICTION_MARKET_ABI,
           functionName: 'vote',
-          args: [BigInt(predictionId), encryptedChoice],
+          args: [BigInt(predictionId), encryptedChoice as any],
         },
         {
           onSuccess: () => {
-            toast.dismiss(voteToastId)
-            toast.success('Vote submitted! Waiting for confirmation...')
+            toast.dismiss(submitToastId)
+            toast.success('Private vote cast successfully!')
+            setTimeout(() => {
+              onOpenChange(false)
+              setSelectedVote(null)
+              setEncryptedPreview(null)
+            }, 1500)
           },
           onError: (error) => {
-            toast.dismiss(voteToastId)
-            const errorMsg = error.message || 'Failed to submit vote'
+            toast.dismiss(submitToastId)
+            const errorMsg = error?.message || 'Failed to submit vote'
             if (errorMsg.includes('CoFHE') || errorMsg.includes('permit')) {
-              toast.error('CoFHE permit may be required – check Fhenix dashboard')
+              toast.error('CoFHE permit required. Activate via Fhenix testnet dashboard.')
             } else {
               toast.error(errorMsg)
             }
+            console.log('[v0] Contract write error:', error)
           },
         }
       )
     } catch (error) {
       toast.dismiss()
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      console.error('[v0] Vote handler error:', error)
 
-      if (errorMessage.includes('CoFHE') || errorMessage.includes('permit')) {
-        toast.error('CoFHE permit may be required on Sepolia – check Fhenix Discord/docs')
-      } else if (errorMessage.includes('web3 provider') || errorMessage.includes('provider')) {
-        toast.error('Failed to initialize provider. Ensure wallet is connected to Sepolia network.')
-        console.log('[v0] Provider initialization error:', errorMessage)
+      if (errorMessage.includes('web3') || errorMessage.includes('provider')) {
+        toast.error('Provider error. Ensure wallet is connected to Sepolia network.')
+      } else if (errorMessage.includes('CoFHE') || errorMessage.includes('permit')) {
+        toast.error('CoFHE permit required. Activate via Fhenix testnet dashboard.')
       } else {
-        toast.error(`Failed to encrypt vote: ${errorMessage}`)
+        toast.error(`Vote error: ${errorMessage}`)
       }
-      console.error('[v0] Vote error:', error)
     } finally {
       setIsEncrypting(false)
     }
