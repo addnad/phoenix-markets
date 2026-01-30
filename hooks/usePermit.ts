@@ -19,7 +19,7 @@ export function usePermit() {
   const [error, setError] = useState<string | null>(null)
 
   /**
-   * Check if FhenixClient has an existing permit
+   * Check if CofheClient has an existing permit
    */
   const checkPermit = useCallback(async () => {
     try {
@@ -27,18 +27,20 @@ export function usePermit() {
         return false
       }
 
-      const { FhenixClient } = await import('fhenixjs')
-      const fheClient = new FhenixClient({ provider: window.ethereum })
+      const { CofheClient } = await import('cofhejs')
+      const cofhe = await CofheClient.init({
+        provider: window.ethereum,
+        chainId: 11155111, // Sepolia
+      })
 
-      // Try to check if permit exists (method may vary by fhenixjs version)
-      // If hasPermit doesn't exist, we assume no permit if encrypt_uint32 fails later
-      if (typeof fheClient.hasPermit === 'function') {
-        const permitExists = await fheClient.hasPermit()
+      // Try to check if permit exists
+      if (typeof cofhe.hasPermit === 'function') {
+        const permitExists = await cofhe.hasPermit()
         setHasPermit(permitExists)
         return permitExists
       }
 
-      // Fallback: assume permit exists if this succeeds
+      // Fallback: assume permit exists if initialization succeeds
       setHasPermit(true)
       return true
     } catch (err) {
@@ -64,16 +66,19 @@ export function usePermit() {
         return false
       }
 
-      const { FhenixClient } = await import('fhenixjs')
+      const { CofheClient } = await import('cofhejs')
 
-      // Initialize FhenixClient
-      let fheClient
+      // Initialize CofheClient
+      let cofhe
       try {
-        fheClient = new FhenixClient({ provider: window.ethereum })
+        cofhe = await CofheClient.init({
+          provider: window.ethereum,
+          chainId: 11155111, // Sepolia
+        })
       } catch (initError) {
         const msg = 'Failed to initialize encryption client'
         setError(msg)
-        console.log('[v0] FhenixClient init error:', initError)
+        console.log('[v0] CofheClient init error:', initError)
         setIsLoading(false)
         return false
       }
@@ -83,20 +88,13 @@ export function usePermit() {
 
       let permitResult
       try {
-        // Try createPermit (common in newer fhenixjs versions)
-        if (typeof fheClient.createPermit === 'function') {
-          permitResult = await fheClient.createPermit({
-            type: 'self',
-            name: 'Phoenix Markets',
-            expiration: expirationTime,
-          })
-        } else if (typeof fheClient.generatePermit === 'function') {
-          // Fallback to generatePermit if available
-          permitResult = await fheClient.generatePermit({
-            expiration: expirationTime,
+        // CofheClient uses generatePermit to create permits
+        if (typeof cofhe.generatePermit === 'function') {
+          permitResult = await cofhe.generatePermit({
+            expirationTime,
           })
         } else {
-          throw new Error('No permit generation method available in FhenixClient')
+          throw new Error('No permit generation method available in CofheClient')
         }
 
         console.log('[v0] Permit generated:', permitResult)

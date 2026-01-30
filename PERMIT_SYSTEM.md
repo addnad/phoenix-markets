@@ -1,14 +1,15 @@
-# CoFHE Permit System
+# CoFHE Permit System with CofheJS
 
 ## Overview
 
-The Phoenix Markets dApp now includes automatic CoFHE permit generation to enable private voting with FHE encryption. Users can activate permits directly in-app without leaving the platform.
+The Phoenix Markets dApp now includes automatic CoFHE permit generation to enable private voting with FHE encryption. Users can activate permits directly in-app without leaving the platform using CofheJS.
 
 ## Components
 
 ### 1. `usePermit` Hook (`/hooks/usePermit.ts`)
 - **checkPermit()**: Checks if a valid CoFHE permit exists for the user's wallet
 - **generatePermit()**: Creates a new 30-day permit for private voting
+- Uses `CofheClient.init({ provider, chainId: 11155111 })`
 - Returns: `{ hasPermit, isLoading, error, checkPermit, generatePermit }`
 
 ### 2. `PermitModal` Component (`/components/permit-modal.tsx`)
@@ -24,7 +25,8 @@ The Phoenix Markets dApp now includes automatic CoFHE permit generation to enabl
 - Checks `checkPermit()` before starting encryption
 - If no permit exists, opens PermitModal instead of encrypting
 - After permit generation, automatically retries encryption
-- Users don't need to click again
+- Uses `CofheClient.init()` with Sepolia chainId
+- Encrypts with `Encryptable.uint32()` helper
 
 #### Create Market Modal (`/components/create-market-modal.tsx`)
 - Same permit checking as vote modal
@@ -70,21 +72,20 @@ The Phoenix Markets dApp now includes automatic CoFHE permit generation to enabl
 ## Configuration
 
 The permit is configured with:
-- Type: `"self"` (user's own wallet)
-- Name: `"Phoenix Markets"` (app identifier)
+- ChainId: `11155111` (Sepolia testnet)
 - Expiration: 30 days from generation
+- Uses `CofheClient.generatePermit()` method
 
 This can be modified in `usePermit.ts` if needed.
 
-## FhenixJS Integration
+## CofheJS Integration
 
-The system uses `fhenixjs` with these methods:
-- `new FhenixClient({ provider: window.ethereum })`
-- `fheClient.hasPermit()` - Check existing permit (if available)
-- `fheClient.createPermit()` - Generate new permit (30-day expiration)
-- `fheClient.encrypt_uint32()` - Encrypt vote choice
-
-Note: FhenixJS API may vary by version. The hook includes fallbacks for different method names.
+The system uses `cofhejs` with these methods:
+- `await CofheClient.init({ provider: window.ethereum, chainId: 11155111 })`
+- `cofhe.hasPermit()` - Check existing permit (if available)
+- `await cofhe.generatePermit({ expirationTime })` - Generate new permit
+- `await cofhe.encrypt(Encryptable.uint32(value))` - Encrypt vote choice
+- `Encryptable.uint32()` - Create typed uint32 for encryption
 
 ## Testing
 
@@ -95,10 +96,21 @@ Note: FhenixJS API may vary by version. The hook includes fallbacks for differen
 ## Troubleshooting
 
 If permit generation fails:
-1. Check that wallet is connected to Sepolia or Arbitrum Sepolia
+1. Check that wallet is connected to Sepolia testnet (chainId 11155111)
 2. Check Fhenix dashboard for CoFHE configuration
 3. Visit https://docs.fhenix.zone or Discord for help
-4. Ensure fhenixjs library is properly installed
+4. Ensure cofhejs library is properly installed: `npm install cofhejs`
+
+## Migration from FhenixJS
+
+- Old: `import { FhenixClient } from 'fhenixjs'`
+- New: `import { CofheClient, Encryptable } from 'cofhejs'`
+
+- Old: `new FhenixClient({ provider: window.ethereum })`
+- New: `await CofheClient.init({ provider: window.ethereum, chainId: 11155111 })`
+
+- Old: `await fheClient.encrypt_uint32(value)`
+- New: `await cofhe.encrypt(Encryptable.uint32(value))`
 
 ## Future Enhancements
 

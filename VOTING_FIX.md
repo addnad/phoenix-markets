@@ -1,4 +1,4 @@
-# Private Vote Encryption Fix - Phoenix Markets
+# Private Vote Encryption with CofheJS - Phoenix Markets
 
 ## What Was Fixed
 
@@ -19,19 +19,24 @@
 }
 ```
 
-### 2. FhenixClient Initialization
+### 2. CofheClient Initialization
 **Problem**: The FhenixClient was receiving wagmi's `publicClient` and `walletClient` objects, which don't provide a proper web3 provider interface.
 
-**Solution**: Updated `/components/vote-modal.tsx` to use `window.ethereum` directly:
+**Solution**: Updated `/components/vote-modal.tsx` to use `window.ethereum` directly with CofheClient:
 ```typescript
-const { FhenixClient } = await import('fhenixjs')
-const fheClient = new FhenixClient({ provider: window.ethereum })
+import { CofheClient, Encryptable } from 'cofhejs'
+
+const cofhe = await CofheClient.init({
+  provider: window.ethereum,
+  chainId: 11155111, // Sepolia
+})
 ```
 
 ### 3. Encryption Flow
 **Changes**:
+- Migrated from `fhenixjs` to `cofhejs` package
 - Loading toast shows "Encrypting your private vote..." during FHE encryption
-- Encryption properly awaits the `encrypt_uint32()` call
+- Encryption uses `Encryptable.uint32()` helper: `await cofhe.encrypt(Encryptable.uint32(choice))`
 - Encrypted bytes are passed directly to `writeContract`
 - Success toast shows "Private vote cast successfully!" (instead of generic message)
 - Clear error handling with CoFHE permit note
@@ -42,8 +47,8 @@ const fheClient = new FhenixClient({ provider: window.ethereum })
 2. **User selects Yes/No** → Button enables
 3. **User clicks Submit Vote**:
    - Toast: "Encrypting your private vote..."
-   - FhenixClient initializes with `window.ethereum`
-   - Vote choice (1 or 0) is encrypted via FHE
+   - CofheClient initializes with `window.ethereum` on Sepolia
+   - Vote choice (1 or 0) is encrypted via FHE using `Encryptable.uint32()`
    - Toast: "Submitting private vote to blockchain..."
    - writeContract sends encrypted bytes to smart contract
    - MetaMask popup appears for transaction confirmation
@@ -68,12 +73,28 @@ const fheClient = new FhenixClient({ provider: window.ethereum })
 ## Files Modified
 
 - `/lib/wagmi.ts` - Fixed vote function ABI type from "inEuint32" to "bytes"
-- `/components/vote-modal.tsx` - Complete rewrite of encryption handler to use window.ethereum
+- `/components/vote-modal.tsx` - Updated to use CofheClient with Encryptable.uint32()
+- `/hooks/usePermit.ts` - Updated permit generation to use CofheClient
+- `/components/tally-viewer.tsx` - Updated to use CofheClient for decryption
+- `/package.json` - Replaced `fhenixjs` with `cofhejs`
 
 ## Key Implementation Details
 
-- FhenixClient initialization uses `window.ethereum` (MetaMask/wallet provider)
-- Encryption is async: `await fheClient.encrypt_uint32(choice ? 1 : 0)`
+- CofheClient initialization requires both provider and chainId (11155111 for Sepolia)
+- Encryption is async: `await cofhe.encrypt(Encryptable.uint32(choice ? 1 : 0))`
+- Encryptable.uint32() creates a typed encryption wrapper for uint32 values
 - Encrypted result is passed as bytes to contract
 - Loading states show different messages for encryption vs. blockchain submission
 - All error cases properly handled with helpful diagnostics
+
+## Package Migration
+
+```json
+// Old
+"fhenixjs": "^0.4.2-alpha.0"
+
+// New
+"cofhejs": "^0.1.0"
+```
+
+CofheJS is the maintained successor to FhenixJS with improved stability and API design.

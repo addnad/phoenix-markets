@@ -18,6 +18,7 @@ import { formatDistanceToNowStrict } from 'date-fns'
 import { toast } from 'sonner'
 import PermitModal from './permit-modal'
 import { usePermit } from '@/hooks/usePermit'
+import { CofheClient, Encryptable } from 'cofhejs' // Declare fheClient and Encryptable variables here
 
 interface VoteModalProps {
   isOpen: boolean
@@ -79,7 +80,7 @@ export default function VoteModal({
 
       const encryptToastId = toast.loading('Encrypting your private vote...')
 
-      // Get window.ethereum for FhenixClient
+      // Get window.ethereum for CofheClient
       if (typeof window === 'undefined' || !window.ethereum) {
         toast.dismiss(encryptToastId)
         toast.error('Web3 provider not available. Please ensure MetaMask or similar wallet extension is installed.')
@@ -87,15 +88,15 @@ export default function VoteModal({
         return
       }
 
-      // Dynamic import to handle FhenixJS
-      const { FhenixClient } = await import('fhenixjs')
-
-      // Initialize FhenixClient with window.ethereum
+      // Initialize CofheClient with window.ethereum
       let fheClient
       try {
-        fheClient = new FhenixClient({ provider: window.ethereum })
+        fheClient = await CofheClient.init({
+          provider: window.ethereum,
+          chainId: 11155111, // Sepolia
+        })
       } catch (clientError) {
-        console.log('[v0] FhenixClient initialization error:', clientError)
+        console.log('[v0] CofheClient initialization error:', clientError)
         toast.dismiss(encryptToastId)
         toast.error('Failed to initialize encryption. Activate CoFHE permit via Fhenix testnet dashboard.')
         setIsEncrypting(false)
@@ -105,7 +106,7 @@ export default function VoteModal({
       // Encrypt the vote (1 for yes, 0 for no)
       let encryptedChoice
       try {
-        encryptedChoice = await fheClient.encrypt_uint32(selectedVote === 'yes' ? 1 : 0)
+        encryptedChoice = await fheClient.encrypt(Encryptable.uint32(selectedVote === 'yes' ? 1 : 0))
       } catch (encryptError) {
         console.log('[v0] Encryption error:', encryptError)
         toast.dismiss(encryptToastId)
