@@ -20,8 +20,10 @@ interface PermitModalProps {
 }
 
 export default function PermitModal({ isOpen, onOpenChange, onPermitGenerated }: PermitModalProps) {
-  const { generatePermit, isLoading, error } = usePermit()
+  const { generatePermit, isLoading, error, permitActive, permitExpiry, getPermitStatus } = usePermit()
   const [hasError, setHasError] = useState(false)
+  
+  const permitStatus = getPermitStatus()
 
   const handleGeneratePermit = async () => {
     setHasError(false)
@@ -52,23 +54,46 @@ export default function PermitModal({ isOpen, onOpenChange, onPermitGenerated }:
         </DialogHeader>
 
         <div className="space-y-6 py-6">
+          {/* Permit Status */}
+          {permitActive && (
+            <div className="p-4 rounded-lg bg-emerald-500/5 border border-emerald-900/20 space-y-2">
+              <p className="text-xs font-semibold text-emerald-400 flex items-center gap-2">
+                <Shield className="w-4 h-4" />
+                Privacy Mode Active
+              </p>
+              <p className="text-xs text-emerald-300">
+                Permit expires in {permitStatus.hoursRemaining} hours
+              </p>
+              {permitExpiry && (
+                <p className="text-xs text-muted-foreground">
+                  Expiry: {permitExpiry.toLocaleDateString()} {permitExpiry.toLocaleTimeString()}
+                </p>
+              )}
+            </div>
+          )}
+          
           {/* Explanation */}
           <div className="space-y-3">
             <p className="text-sm text-foreground leading-relaxed">
-              One-time setup to enable private voting. This signs a permission grant for your wallet — completely gas-free and valid for approximately 30 days.
+              {permitActive 
+                ? 'Your privacy mode is active. You can now cast encrypted votes.'
+                : 'One-time setup to enable private voting. This signs a permission grant for your wallet — completely gas-free and valid for approximately 30 days.'
+              }
             </p>
-            <div className="p-4 rounded-lg bg-orange-500/5 border border-orange-900/20 space-y-2">
-              <p className="text-xs font-semibold text-orange-400 flex items-center gap-2">
-                <Lock className="w-4 h-4" />
-                What happens:
-              </p>
-              <ul className="text-xs text-muted-foreground space-y-1 ml-6 list-disc">
-                <li>Your wallet signs a privacy permit (off-chain)</li>
-                <li>Enables encrypted voting via FHE technology</li>
-                <li>No gas fees required</li>
-                <li>Valid for ~30 days, then reactivate</li>
-              </ul>
-            </div>
+            {!permitActive && (
+              <div className="p-4 rounded-lg bg-orange-500/5 border border-orange-900/20 space-y-2">
+                <p className="text-xs font-semibold text-orange-400 flex items-center gap-2">
+                  <Lock className="w-4 h-4" />
+                  How it works:
+                </p>
+                <ul className="text-xs text-muted-foreground space-y-1 ml-6 list-disc">
+                  <li>Your wallet signs a privacy permit (off-chain)</li>
+                  <li>Enables encrypted voting via FHE technology</li>
+                  <li>Access control ensures only you can decrypt</li>
+                  <li>Valid for ~30 days, then reactivate</li>
+                </ul>
+              </div>
+            )}
           </div>
 
           {/* Error Alert */}
@@ -77,7 +102,7 @@ export default function PermitModal({ isOpen, onOpenChange, onPermitGenerated }:
               <AlertDescription className="text-red-400 text-sm">
                 {error}. Need help? Check{' '}
                 <a
-                  href="https://docs.fhenix.zone"
+                  href="https://cofhe-docs.fhenix.zone/fhe-library/core-concepts/access-control"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="underline hover:text-red-300 inline-flex items-center gap-1"
@@ -93,18 +118,23 @@ export default function PermitModal({ isOpen, onOpenChange, onPermitGenerated }:
           {/* Generate Button */}
           <Button
             onClick={handleGeneratePermit}
-            disabled={isLoading}
-            className="w-full h-11 gap-2 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white font-semibold"
+            disabled={isLoading || permitActive}
+            className="w-full h-11 gap-2 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 disabled:opacity-50 text-white font-semibold"
           >
-            {isLoading ? (
+            {permitActive ? (
+              <>
+                <Shield className="w-4 h-4" />
+                Privacy Mode Active
+              </>
+            ) : isLoading ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                Generating Permit...
+                Activating Privacy...
               </>
             ) : (
               <>
                 <Shield className="w-4 h-4" />
-                Generate & Activate Permit
+                Activate Privacy Mode
               </>
             )}
           </Button>

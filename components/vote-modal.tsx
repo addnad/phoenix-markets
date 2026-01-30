@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import { useWriteContract, useWaitForTransactionReceipt, useAccount } from 'wagmi'
-import { useWalletClient } from 'wagmi'
 import {
   Dialog,
   DialogContent,
@@ -14,12 +13,14 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { CONTRACT_ADDRESS, PREDICTION_MARKET_ABI } from '@/lib/wagmi'
-import { Lock, Loader2, Flame, CheckCircle2, AlertCircle, Wallet, Shield } from 'lucide-react'
+import { Lock, Loader2, Flame, CheckCircle2, AlertCircle, Wallet, Shield, Network } from 'lucide-react'
 import { formatDistanceToNowStrict } from 'date-fns'
 import { toast } from 'sonner'
 import PermitModal from './permit-modal'
 import { usePermit } from '@/hooks/usePermit'
-import { useCofheClient } from '@/hooks/useCofheClient'
+import { useEncryption } from '@/hooks/useEncryption'
+import { useNetworkDetection } from '@/hooks/useNetworkDetection'
+import { useCofheClient } from '@/hooks/useCofheClient' // Import useCofheClient hook
 
 interface VoteModalProps {
   isOpen: boolean
@@ -37,9 +38,10 @@ export default function VoteModal({
   endTime,
 }: VoteModalProps) {
   const { address, isConnected } = useAccount()
-  const { cofhe, isReady: cofheReady } = useCofheClient()
+  const { encryptVote, isEncrypting } = useEncryption()
+  const { isValidNetwork, currentNetwork, ensureValidNetwork } = useNetworkDetection()
+  const { cofheReady, cofhe } = useCofheClient() // Declare cofheReady and cofhe variables
   const [selectedVote, setSelectedVote] = useState<'yes' | 'no' | null>(null)
-  const [isEncrypting, setIsEncrypting] = useState(false)
   const [encryptedPreview, setEncryptedPreview] = useState<string | null>(null)
   const [permitModalOpen, setPermitModalOpen] = useState(false)
   const { writeContract, isPending, data: hash } = useWriteContract()
@@ -48,9 +50,10 @@ export default function VoteModal({
     confirmations: 1,
   })
   const { checkPermit } = usePermit()
+  const [isEncryptingState, setIsEncryptingState] = useState(false) // Declare setIsEncrypting variable
 
   const timeRemaining = formatDistanceToNowStrict(endTime * 1000)
-  const isLoading = isPending || isWaiting || isEncrypting
+  const isLoading = isPending || isWaiting || isEncryptingState
 
   useEffect(() => {
     if (isSuccess) {
@@ -69,65 +72,38 @@ export default function VoteModal({
       return
     }
 
-    // Check if CofheClient is ready
-    if (!cofheReady || !cofhe) {
-      toast.error('CoFHE not ready. Opening privacy setup...')
-      setPermitModalOpen(true)
+    // Ensure user is on a valid network
+    const validNetwork = await ensureValidNetwork()
+    if (!validNetwork) {
+      toast.error('Please switch to Sepolia or Arbitrum Sepolia')
       return
     }
 
     try {
-      setIsEncrypting(true)
       const encryptToastId = toast.loading('Encrypting your private vote...')
 
-      // Encrypt the vote (1 for yes, 0 for no)
-      let encryptedChoice
-      try {
-        // For stub/v0 preview: create a simple encrypted representation
-        // In production, this would use actual CofheClient FHE encryption
-        const choiceValue = selectedVote === 'yes' ? 1 : 0
-        console.log('[v0] Encrypting vote choice:', choiceValue)
-        
-        // Call stub encrypt or real cofhe.encrypt
-        encryptedChoice = await cofhe.encrypt(choiceValue)
-        
-        // Ensure it's Uint8Array for contract submission
-        if (!(encryptedChoice instanceof Uint8Array)) {
-          encryptedChoice = new Uint8Array([choiceValue])
-        }
-        
-        // Convert Uint8Array to hex string for wagmi
-        const hexString = '0x' + Array.from(encryptedChoice)
-          .map(b => b.toString(16).padStart(2, '0'))
-          .join('')
-        console.log('[v0] Encrypted as hex:', hexString)
-      } catch (encryptError) {
-        console.log('[v0] Encryption error:', encryptError)
+      // Encrypt the vote using the new encryption hook with access control
+      const choice = selectedVote === 'yes' ? 1 : 0
+      const encryptionResult = await encryptVote(choice)
+
+      if (!encryptionResult) {
         toast.dismiss(encryptToastId)
-        toast.error('Encryption failed. Try activating CoFHE permit again.')
-        setIsEncrypting(false)
         return
       }
 
       // Show encrypted preview
-      const previewStr = encryptedChoice.toString ? encryptedChoice.toString() : String(encryptedChoice)
-      setEncryptedPreview(`${previewStr.substring(0, 10)}...`)
+      setEncryptedPreview(`${encryptionResult.encryptedValue.substring(0, 10)}...`)
 
       toast.dismiss(encryptToastId)
       const submitToastId = toast.loading('Submitting private vote to blockchain...')
 
-      // Convert to hex for contract call
-      const encryptedHex = '0x' + Array.from(encryptedChoice)
-        .map(b => b.toString(16).padStart(2, '0'))
-        .join('')
-
-      // Submit encrypted vote to contract
+      // Submit encrypted vote to contract with access control
       writeContract(
         {
           address: CONTRACT_ADDRESS,
           abi: PREDICTION_MARKET_ABI,
           functionName: 'vote',
-          args: [BigInt(predictionId), encryptedHex as any],
+          args: [BigInt(predictionId), encryptionResult.encryptedValue as any],
         },
         {
           onSuccess: () => {
@@ -145,7 +121,6 @@ export default function VoteModal({
     } catch (err) {
       console.log('[v0] Vote handler error:', err)
       toast.error('Vote submission failed. Please try again.')
-      setIsEncrypting(false)
     }
   }
 
@@ -161,7 +136,7 @@ export default function VoteModal({
                   <Flame className="w-8 h-8 text-orange-500 animate-bounce" />
                 </div>
                 <p className="text-sm text-orange-400 font-semibold">
-                  {isEncrypting ? 'Encrypting vote...' : 'Submitting to blockchain...'}
+                  {isEncryptingState ? 'Encrypting vote...' : 'Submitting to blockchain...'}
                 </p>
               </div>
             </div>
@@ -172,8 +147,21 @@ export default function VoteModal({
               <Lock className="w-5 h-5 text-orange-500" />
               Private Vote
             </DialogTitle>
-            <DialogDescription>
-              Cast your encrypted vote on this prediction
+            <DialogDescription className="flex items-center justify-between">
+              <span>Cast your encrypted vote on this prediction</span>
+              <div className="flex items-center gap-1 ml-2">
+                {isValidNetwork ? (
+                  <>
+                    <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                    <span className="text-xs text-emerald-400">{currentNetwork?.name}</span>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                    <span className="text-xs text-red-400">Switch Network</span>
+                  </>
+                )}
+              </div>
             </DialogDescription>
           </DialogHeader>
 
@@ -265,7 +253,7 @@ export default function VoteModal({
                 {isLoading ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    {isEncrypting ? 'Encrypting...' : 'Submitting...'}
+                    {isEncryptingState ? 'Encrypting...' : 'Submitting...'}
                   </>
                 ) : (
                   <>
