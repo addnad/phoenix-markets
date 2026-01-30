@@ -42,16 +42,8 @@ export default function TallyViewer({ predictionId }: TallyViewerProps) {
       setIsDecrypting(true)
       toast.loading('Decrypting tallies...')
 
-      // Dynamic import CofheJS
-      const { CofheClient, Encryptable } = await import('cofhejs')
-      
-      const cofhe = await CofheClient.init({
-        provider: window.ethereum,
-        chainId: 11155111, // Sepolia
-      })
-      
-      // In a real implementation, use the actual sealed tallies
-      // and CofheClient.unseal to decrypt
+      // In a real implementation, use actual sealed tallies and CofheClient to decrypt
+      // For v0 preview, show mock decrypted values
       toast.dismiss()
       toast.success('Decrypted! (Demo mode - see console)')
       
