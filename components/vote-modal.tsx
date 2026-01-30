@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useWriteContract, useWaitForTransactionReceipt, useAccount } from 'wagmi'
+import { useWriteContract, useWaitForTransactionReceipt, useAccount, useWalletClient } from 'wagmi'
 import {
   Dialog,
   DialogContent,
@@ -18,7 +18,6 @@ import { formatDistanceToNowStrict } from 'date-fns'
 import { toast } from 'sonner'
 import PermitModal from './permit-modal'
 import { usePermit } from '@/hooks/usePermit'
-import { CofheClient, Encryptable } from 'cofhejs' // Declare fheClient and Encryptable variables here
 
 interface VoteModalProps {
   isOpen: boolean
@@ -36,6 +35,7 @@ export default function VoteModal({
   endTime,
 }: VoteModalProps) {
   const { address, isConnected } = useAccount()
+  const { data: walletClient } = useWalletClient()
   const [selectedVote, setSelectedVote] = useState<'yes' | 'no' | null>(null)
   const [isEncrypting, setIsEncrypting] = useState(false)
   const [encryptedPreview, setEncryptedPreview] = useState<string | null>(null)
@@ -45,7 +45,7 @@ export default function VoteModal({
     hash,
     confirmations: 1,
   })
-  const { hasPermit, checkPermit } = usePermit()
+  const { checkPermit } = usePermit(walletClient)
 
   const timeRemaining = formatDistanceToNowStrict(endTime * 1000)
   const isLoading = isPending || isWaiting || isEncrypting
@@ -80,19 +80,20 @@ export default function VoteModal({
 
       const encryptToastId = toast.loading('Encrypting your private vote...')
 
-      // Get window.ethereum for CofheClient
-      if (typeof window === 'undefined' || !window.ethereum) {
+      // Check wallet client has signer capability
+      if (!walletClient || !walletClient.account) {
         toast.dismiss(encryptToastId)
-        toast.error('Web3 provider not available. Please ensure MetaMask or similar wallet extension is installed.')
+        toast.error('Wallet not connected or no signer. Reconnect MetaMask.')
         setIsEncrypting(false)
         return
       }
 
-      // Initialize CofheClient with window.ethereum
-      let fheClient
+      // Initialize CofheClient with walletClient (must have signer)
+      let cofhe
       try {
-        fheClient = await CofheClient.init({
-          provider: window.ethereum,
+        const { CofheClient } = await import('cofhejs')
+        cofhe = await CofheClient.init({
+          provider: walletClient,
           chainId: 11155111, // Sepolia
         })
       } catch (clientError) {
@@ -106,7 +107,8 @@ export default function VoteModal({
       // Encrypt the vote (1 for yes, 0 for no)
       let encryptedChoice
       try {
-        encryptedChoice = await fheClient.encrypt(Encryptable.uint32(selectedVote === 'yes' ? 1 : 0))
+        const { Encryptable } = await import('cofhejs')
+        encryptedChoice = await cofhe.encrypt(Encryptable.uint32(selectedVote === 'yes' ? 1 : 0))
       } catch (encryptError) {
         console.log('[v0] Encryption error:', encryptError)
         toast.dismiss(encryptToastId)
