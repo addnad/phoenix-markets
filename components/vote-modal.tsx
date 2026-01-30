@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useWriteContract, useWaitForTransactionReceipt, usePublicClient, useAccount } from 'wagmi'
+import { useWriteContract, useWaitForTransactionReceipt, usePublicClient, useAccount, useWalletClient } from 'wagmi'
 import {
   Dialog,
   DialogContent,
@@ -37,6 +37,7 @@ export default function VoteModal({
   const [isEncrypting, setIsEncrypting] = useState(false)
   const [encryptedPreview, setEncryptedPreview] = useState<string | null>(null)
   const publicClient = usePublicClient()
+  const { data: walletClient } = useWalletClient()
   const { writeContract, isPending, data: hash } = useWriteContract()
   const { isLoading: isWaiting, isSuccess } = useWaitForTransactionReceipt({
     hash,
@@ -68,15 +69,48 @@ export default function VoteModal({
       // Dynamic import to handle FhenixJS
       const FhenixClient = (await import('fhenixjs')).FhenixClient
 
-      if (!publicClient) {
-        toast.error('Failed to initialize client', { id: toastId })
+      // Try to use wallet client first, fall back to public client
+      const provider = walletClient || publicClient
+      
+      if (!provider) {
+        toast.dismiss(toastId)
+        toast.error('Failed to initialize provider. Please ensure your wallet is connected to Sepolia network.')
         setIsEncrypting(false)
         return
       }
 
-      const fheClient = new FhenixClient({
-        publicClient,
-      })
+      // Initialize FhenixClient - pass transport config if available
+      let fheClient
+      try {
+        // Try initializing with the provider/client directly
+        fheClient = new FhenixClient({
+          publicClient: provider,
+        })
+      } catch (initError1) {
+        console.log('[v0] FhenixClient init attempt 1 failed, trying alternative:', initError1)
+        try {
+          // Try with direct provider reference
+          fheClient = new FhenixClient({
+            provider: provider as any,
+          })
+        } catch (initError2) {
+          console.log('[v0] FhenixClient init attempt 2 failed, trying minimal config:', initError2)
+          try {
+            // Try minimal initialization
+            fheClient = new FhenixClient()
+          } catch (initError3) {
+            toast.dismiss(toastId)
+            console.error('[v0] All FhenixClient initialization attempts failed:', {
+              attempt1: initError1,
+              attempt2: initError2,
+              attempt3: initError3,
+            })
+            toast.error('Failed to initialize encryption. Ensure you are on Sepolia network and CoFHE is configured.')
+            setIsEncrypting(false)
+            return
+          }
+        }
+      }
 
       // Encrypt the vote (1 for yes, 0 for no)
       const encryptedChoice = fheClient.encrypt_uint32(selectedVote === 'yes' ? 1 : 0)
@@ -114,10 +148,13 @@ export default function VoteModal({
 
       if (errorMessage.includes('CoFHE') || errorMessage.includes('permit')) {
         toast.error('CoFHE permit may be required on Sepolia – check Fhenix Discord/docs')
+      } else if (errorMessage.includes('web3 provider') || errorMessage.includes('provider')) {
+        toast.error('Failed to initialize provider. Ensure wallet is connected to Sepolia network.')
+        console.log('[v0] Provider initialization error:', errorMessage)
       } else {
         toast.error(`Failed to encrypt vote: ${errorMessage}`)
       }
-      console.error('Vote error:', error)
+      console.error('[v0] Vote error:', error)
     } finally {
       setIsEncrypting(false)
     }
