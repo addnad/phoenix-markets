@@ -29,7 +29,7 @@ export const PREDICTION_MARKET_ABI = [
   {
     inputs: [
       { internalType: 'uint256', name: '_predictionId', type: 'uint256' },
-      { internalType: 'inEuint32', name: '_encryptedChoice', type: 'inEuint32' },
+      { internalType: 'inEuint32', name: '_encryptedChoice', type: 'bytes' },
     ],
     name: 'vote',
     outputs: [],

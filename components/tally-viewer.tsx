@@ -42,13 +42,8 @@ export default function TallyViewer({ predictionId }: TallyViewerProps) {
       setIsDecrypting(true)
       toast.loading('Decrypting tallies...')
 
-      // Dynamic import FhenixJS
-      const FhenixClient = (await import('fhenixjs')).FhenixClient
-      
-      const fheClient = new FhenixClient()
-      
-      // In a real implementation, use the actual sealed tallies
-      // and FhenixClient.unseal to decrypt
+      // In a real implementation, use actual sealed tallies and CofheClient to decrypt
+      // For v0 preview, show mock decrypted values
       toast.dismiss()
       toast.success('Decrypted! (Demo mode - see console)')
       

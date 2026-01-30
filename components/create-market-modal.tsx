@@ -28,8 +28,11 @@ import { Textarea } from '@/components/ui/textarea'
 import { Slider } from '@/components/ui/slider'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { CONTRACT_ADDRESS, PREDICTION_MARKET_ABI } from '@/lib/wagmi'
-import { Plus, Loader2, Flame, AlertCircle } from 'lucide-react'
+import { Plus, Loader2, Flame, AlertCircle, Shield } from 'lucide-react'
 import { toast } from 'sonner'
+import PermitModal from './permit-modal'
+import { usePermit } from '@/hooks/usePermit'
+import { useWalletClient } from 'wagmi'
 
 const createMarketSchema = z.object({
   description: z
@@ -58,6 +61,7 @@ export default function CreateMarketModal({
   prefillDescription = '',
 }: CreateMarketModalProps) {
   const [isOpen, setIsOpen] = useState(false)
+  const [permitModalOpen, setPermitModalOpen] = useState(false)
   const { address, isConnected } = useAccount()
   const actualIsOpen = controlledIsOpen !== undefined ? controlledIsOpen : isOpen
   const setActualIsOpen = onOpenChange || setIsOpen
@@ -75,6 +79,7 @@ export default function CreateMarketModal({
     hash,
     confirmations: 1,
   })
+  const { checkPermit } = usePermit()
 
   const isLoading = isPending || isWaiting || form.formState.isSubmitting
 
@@ -94,6 +99,13 @@ export default function CreateMarketModal({
     }
 
     try {
+      // Check if permit exists
+      const permitExists = await checkPermit()
+      if (!permitExists) {
+        setPermitModalOpen(true)
+        return
+      }
+
       // Convert days to seconds
       const durationInSeconds = Math.floor(values.durationDays * 24 * 60 * 60)
 
@@ -109,19 +121,21 @@ export default function CreateMarketModal({
         {
           onSuccess: () => {
             toast.dismiss(toastId)
-            toast.success('Market created! Waiting for confirmation...')
+            toast.success('Market created successfully!')
           },
           onError: (error) => {
             toast.dismiss(toastId)
-            const errorMsg = error.message || 'Failed to create market'
+            const errorMsg = error?.message || 'Failed to create market'
             toast.error(errorMsg)
+            console.log('[v0] Contract error:', error)
           },
         }
       )
     } catch (error) {
+      toast.dismiss()
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
       toast.error(`Failed to create market: ${errorMessage}`)
-      console.error('Create market error:', error)
+      console.log('[v0] Create market error:', error)
     }
   }
 
@@ -186,7 +200,13 @@ export default function CreateMarketModal({
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <form 
+            onSubmit={form.handleSubmit(onSubmit, (errors) => {
+              console.log('[v0] Form validation errors:', errors)
+              // Validation errors are already displayed by FormMessage
+            })}
+            className="space-y-6"
+          >
             {/* Description Field */}
             <FormField
               control={form.control}
