@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useWriteContract, useWaitForTransactionReceipt, useAccount, useWalletClient } from 'wagmi'
+import { useWriteContract, useWaitForTransactionReceipt, useAccount } from 'wagmi'
+import { useWalletClient } from 'wagmi'
 import {
   Dialog,
   DialogContent,
@@ -19,7 +20,6 @@ import { toast } from 'sonner'
 import PermitModal from './permit-modal'
 import { usePermit } from '@/hooks/usePermit'
 import { useCofheClient } from '@/hooks/useCofheClient'
-import { WalletClient } from 'wagmi'
 
 interface VoteModalProps {
   isOpen: boolean
@@ -48,7 +48,6 @@ export default function VoteModal({
     confirmations: 1,
   })
   const { checkPermit } = usePermit()
-  const { data: walletClient } = useWalletClient()
 
   const timeRemaining = formatDistanceToNowStrict(endTime * 1000)
   const isLoading = isPending || isWaiting || isEncrypting
@@ -96,6 +95,12 @@ export default function VoteModal({
         if (!(encryptedChoice instanceof Uint8Array)) {
           encryptedChoice = new Uint8Array([choiceValue])
         }
+        
+        // Convert Uint8Array to hex string for wagmi
+        const hexString = '0x' + Array.from(encryptedChoice)
+          .map(b => b.toString(16).padStart(2, '0'))
+          .join('')
+        console.log('[v0] Encrypted as hex:', hexString)
       } catch (encryptError) {
         console.log('[v0] Encryption error:', encryptError)
         toast.dismiss(encryptToastId)
@@ -111,13 +116,18 @@ export default function VoteModal({
       toast.dismiss(encryptToastId)
       const submitToastId = toast.loading('Submitting private vote to blockchain...')
 
+      // Convert to hex for contract call
+      const encryptedHex = '0x' + Array.from(encryptedChoice)
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('')
+
       // Submit encrypted vote to contract
       writeContract(
         {
           address: CONTRACT_ADDRESS,
           abi: PREDICTION_MARKET_ABI,
           functionName: 'vote',
-          args: [BigInt(predictionId), encryptedChoice as any],
+          args: [BigInt(predictionId), encryptedHex as any],
         },
         {
           onSuccess: () => {
