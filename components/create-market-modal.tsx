@@ -28,8 +28,10 @@ import { Textarea } from '@/components/ui/textarea'
 import { Slider } from '@/components/ui/slider'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { CONTRACT_ADDRESS, PREDICTION_MARKET_ABI } from '@/lib/wagmi'
-import { Plus, Loader2, Flame, AlertCircle } from 'lucide-react'
+import { Plus, Loader2, Flame, AlertCircle, Shield } from 'lucide-react'
 import { toast } from 'sonner'
+import PermitModal from './permit-modal'
+import { usePermit } from '@/hooks/usePermit'
 
 const createMarketSchema = z.object({
   description: z
@@ -58,6 +60,7 @@ export default function CreateMarketModal({
   prefillDescription = '',
 }: CreateMarketModalProps) {
   const [isOpen, setIsOpen] = useState(false)
+  const [permitModalOpen, setPermitModalOpen] = useState(false)
   const { address, isConnected } = useAccount()
   const actualIsOpen = controlledIsOpen !== undefined ? controlledIsOpen : isOpen
   const setActualIsOpen = onOpenChange || setIsOpen
@@ -75,6 +78,7 @@ export default function CreateMarketModal({
     hash,
     confirmations: 1,
   })
+  const { checkPermit } = usePermit()
 
   const isLoading = isPending || isWaiting || form.formState.isSubmitting
 
@@ -94,6 +98,13 @@ export default function CreateMarketModal({
     }
 
     try {
+      // Check if permit exists
+      const permitExists = await checkPermit()
+      if (!permitExists) {
+        setPermitModalOpen(true)
+        return
+      }
+
       // Convert days to seconds
       const durationInSeconds = Math.floor(values.durationDays * 24 * 60 * 60)
 
@@ -304,5 +315,14 @@ export default function CreateMarketModal({
         )}
       </DialogContent>
     </Dialog>
+    {/* Permit Modal */}
+    <PermitModal
+      isOpen={permitModalOpen}
+      onOpenChange={setPermitModalOpen}
+      onPermitGenerated={() => {
+        // Retry form submission after permit is generated
+        form.handleSubmit(onSubmit)()
+      }}
+    />
   )
 }

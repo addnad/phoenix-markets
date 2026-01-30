@@ -11,10 +11,11 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
-import { Lock, Zap, LogOut, Wallet, Flame, Menu, Plus } from 'lucide-react'
+import { Lock, Zap, LogOut, Wallet, Flame, Menu, Plus, Shield } from 'lucide-react'
 import { sepolia, arbitrumSepolia } from 'wagmi/chains'
 import { useState } from 'react'
 import CreateMarketModal from './create-market-modal'
+import PermitModal from './permit-modal'
 
 export default function Navbar() {
   const { address, isConnected } = useAccount()
@@ -23,6 +24,7 @@ export default function Navbar() {
   const { disconnect } = useDisconnect()
   const { connect, connectors } = useConnect()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [permitModalOpen, setPermitModalOpen] = useState(false)
 
   const currentChain = chainId === arbitrumSepolia.id ? arbitrumSepolia : sepolia
 
@@ -72,6 +74,19 @@ export default function Navbar() {
 
           {/* Right section */}
           <div className="flex items-center gap-3">
+            {/* Privacy Setup Button */}
+            {isConnected && (
+              <Button
+                onClick={() => setPermitModalOpen(true)}
+                variant="outline"
+                size="sm"
+                className="gap-2 bg-transparent hidden sm:flex"
+              >
+                <Shield className="w-4 h-4" />
+                <span className="hidden md:inline text-xs">Privacy Setup</span>
+              </Button>
+            )}
+
             {/* Create Market Button */}
             {isConnected && (
               <CreateMarketModal />
@@ -168,5 +183,8 @@ export default function Navbar() {
         </div>
       </div>
     </nav>
+
+    {/* Permit Modal */}
+    <PermitModal isOpen={permitModalOpen} onOpenChange={setPermitModalOpen} />
   )
 }

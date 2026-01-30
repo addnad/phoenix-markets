@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useWriteContract, useWaitForTransactionReceipt, useAccount, usePublicClient, useWalletClient } from 'wagmi'
+import { useWriteContract, useWaitForTransactionReceipt, useAccount } from 'wagmi'
 import {
   Dialog,
   DialogContent,
@@ -13,9 +13,11 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { CONTRACT_ADDRESS, PREDICTION_MARKET_ABI } from '@/lib/wagmi'
-import { Lock, Loader2, Flame, CheckCircle2, AlertCircle, Wallet } from 'lucide-react'
+import { Lock, Loader2, Flame, CheckCircle2, AlertCircle, Wallet, Shield } from 'lucide-react'
 import { formatDistanceToNowStrict } from 'date-fns'
 import { toast } from 'sonner'
+import PermitModal from './permit-modal'
+import { usePermit } from '@/hooks/usePermit'
 
 interface VoteModalProps {
   isOpen: boolean
@@ -36,11 +38,13 @@ export default function VoteModal({
   const [selectedVote, setSelectedVote] = useState<'yes' | 'no' | null>(null)
   const [isEncrypting, setIsEncrypting] = useState(false)
   const [encryptedPreview, setEncryptedPreview] = useState<string | null>(null)
+  const [permitModalOpen, setPermitModalOpen] = useState(false)
   const { writeContract, isPending, data: hash } = useWriteContract()
   const { isLoading: isWaiting, isSuccess } = useWaitForTransactionReceipt({
     hash,
     confirmations: 1,
   })
+  const { hasPermit, checkPermit } = usePermit()
 
   const timeRemaining = formatDistanceToNowStrict(endTime * 1000)
   const isLoading = isPending || isWaiting || isEncrypting
@@ -64,6 +68,15 @@ export default function VoteModal({
 
     try {
       setIsEncrypting(true)
+
+      // Check if permit exists
+      const permitExists = await checkPermit()
+      if (!permitExists) {
+        setIsEncrypting(false)
+        setPermitModalOpen(true)
+        return
+      }
+
       const encryptToastId = toast.loading('Encrypting your private vote...')
 
       // Get window.ethereum for FhenixClient
@@ -302,6 +315,15 @@ export default function VoteModal({
           </div>
         </div>
       </DialogContent>
+      {/* Permit Modal */}
+      <PermitModal
+        isOpen={permitModalOpen}
+        onOpenChange={setPermitModalOpen}
+        onPermitGenerated={() => {
+          // Retry encryption after permit is generated
+          handleEncryptAndVote()
+        }}
+      />
     </Dialog>
   )
 }
