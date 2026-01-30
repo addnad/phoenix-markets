@@ -86,19 +86,33 @@ export default function CreatePredictionModal({
     try {
       const durationInSeconds = Math.floor(values.durationHours * 3600)
 
-      toast.loading('Creating prediction...')
+      const toastId = toast.loading('Creating prediction...')
 
-      writeContract({
-        address: CONTRACT_ADDRESS,
-        abi: PREDICTION_MARKET_ABI,
-        functionName: 'createPrediction',
-        args: [values.description, BigInt(durationInSeconds)],
-      })
+      writeContract(
+        {
+          address: CONTRACT_ADDRESS,
+          abi: PREDICTION_MARKET_ABI,
+          functionName: 'createPrediction',
+          args: [values.description, BigInt(durationInSeconds)],
+        },
+        {
+          onSuccess: () => {
+            toast.dismiss(toastId)
+            toast.success('Prediction created successfully!')
+          },
+          onError: (error) => {
+            toast.dismiss(toastId)
+            const errorMsg = error?.message || 'Failed to create prediction'
+            toast.error(errorMsg)
+            console.log('[v0] Contract error:', error)
+          },
+        }
+      )
     } catch (error) {
       toast.dismiss()
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
       toast.error(`Failed to create prediction: ${errorMessage}`)
-      console.error('Create error:', error)
+      console.log('[v0] Create error:', error)
     }
   }
 
@@ -128,7 +142,14 @@ export default function CreatePredictionModal({
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={form.handleSubmit(onSubmit, (errors) => {
+            // Handle validation errors
+            if (errors.description?.message) {
+              toast.error(errors.description.message)
+            } else if (errors.durationHours?.message) {
+              toast.error(errors.durationHours.message)
+            }
+          })} className="space-y-4">
             <FormField
               control={form.control}
               name="description"

@@ -109,19 +109,21 @@ export default function CreateMarketModal({
         {
           onSuccess: () => {
             toast.dismiss(toastId)
-            toast.success('Market created! Waiting for confirmation...')
+            toast.success('Market created successfully!')
           },
           onError: (error) => {
             toast.dismiss(toastId)
-            const errorMsg = error.message || 'Failed to create market'
+            const errorMsg = error?.message || 'Failed to create market'
             toast.error(errorMsg)
+            console.log('[v0] Contract error:', error)
           },
         }
       )
     } catch (error) {
+      toast.dismiss()
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
       toast.error(`Failed to create market: ${errorMessage}`)
-      console.error('Create market error:', error)
+      console.log('[v0] Create market error:', error)
     }
   }
 
@@ -186,7 +188,14 @@ export default function CreateMarketModal({
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <form onSubmit={form.handleSubmit(onSubmit, (errors) => {
+            // Handle validation errors
+            if (errors.description?.message) {
+              toast.error(errors.description.message)
+            } else if (errors.durationDays?.message) {
+              toast.error(errors.durationDays.message)
+            }
+          })} className="space-y-6">
             {/* Description Field */}
             <FormField
               control={form.control}
