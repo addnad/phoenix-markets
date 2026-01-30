@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { useWalletClient } from 'wagmi'
 import {
   Dialog,
   DialogContent,
@@ -21,8 +20,7 @@ interface PermitModalProps {
 }
 
 export default function PermitModal({ isOpen, onOpenChange, onPermitGenerated }: PermitModalProps) {
-  const { data: walletClient } = useWalletClient()
-  const { generatePermit, isLoading, error } = usePermit(walletClient)
+  const { generatePermit, isLoading, error } = usePermit()
   const [hasError, setHasError] = useState(false)
 
   const handleGeneratePermit = async () => {

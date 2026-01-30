@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useWriteContract, useWaitForTransactionReceipt, useAccount, useWalletClient } from 'wagmi'
+import { useWriteContract, useWaitForTransactionReceipt, useAccount } from 'wagmi'
 import {
   Dialog,
   DialogContent,
@@ -32,6 +32,7 @@ import { Plus, Loader2, Flame, AlertCircle, Shield } from 'lucide-react'
 import { toast } from 'sonner'
 import PermitModal from './permit-modal'
 import { usePermit } from '@/hooks/usePermit'
+import { useWalletClient } from 'wagmi'
 
 const createMarketSchema = z.object({
   description: z
@@ -62,7 +63,6 @@ export default function CreateMarketModal({
   const [isOpen, setIsOpen] = useState(false)
   const [permitModalOpen, setPermitModalOpen] = useState(false)
   const { address, isConnected } = useAccount()
-  const { data: walletClient } = useWalletClient()
   const actualIsOpen = controlledIsOpen !== undefined ? controlledIsOpen : isOpen
   const setActualIsOpen = onOpenChange || setIsOpen
 
@@ -79,7 +79,7 @@ export default function CreateMarketModal({
     hash,
     confirmations: 1,
   })
-  const { checkPermit } = usePermit(walletClient)
+  const { checkPermit } = usePermit()
 
   const isLoading = isPending || isWaiting || form.formState.isSubmitting
 

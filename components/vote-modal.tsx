@@ -18,6 +18,7 @@ import { formatDistanceToNowStrict } from 'date-fns'
 import { toast } from 'sonner'
 import PermitModal from './permit-modal'
 import { usePermit } from '@/hooks/usePermit'
+import { WalletClient } from 'wagmi'
 
 interface VoteModalProps {
   isOpen: boolean
@@ -35,7 +36,6 @@ export default function VoteModal({
   endTime,
 }: VoteModalProps) {
   const { address, isConnected } = useAccount()
-  const { data: walletClient } = useWalletClient()
   const [selectedVote, setSelectedVote] = useState<'yes' | 'no' | null>(null)
   const [isEncrypting, setIsEncrypting] = useState(false)
   const [encryptedPreview, setEncryptedPreview] = useState<string | null>(null)
@@ -45,7 +45,8 @@ export default function VoteModal({
     hash,
     confirmations: 1,
   })
-  const { checkPermit } = usePermit(walletClient)
+  const { checkPermit } = usePermit()
+  const { data: walletClient } = useWalletClient()
 
   const timeRemaining = formatDistanceToNowStrict(endTime * 1000)
   const isLoading = isPending || isWaiting || isEncrypting

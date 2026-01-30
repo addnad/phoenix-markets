@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react'
 import { toast } from 'sonner'
-import type { WalletClient } from 'wagmi'
+import { useCofheClient } from './useCofheClient'
 
 export interface PermitStatus {
   hasPermit: boolean
@@ -12,9 +12,10 @@ export interface PermitStatus {
 
 /**
  * Hook to manage CoFHE permit generation and checking
- * Requires walletClient with signer capability from wagmi
+ * Uses the pre-initialized CofheClient from useCofheClient
  */
-export function usePermit(walletClient?: WalletClient | null) {
+export function usePermit() {
+  const { cofhe, isReady } = useCofheClient()
   const [hasPermit, setHasPermit] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -23,18 +24,12 @@ export function usePermit(walletClient?: WalletClient | null) {
    * Check if CofheClient has an existing permit
    */
   const checkPermit = useCallback(async () => {
+    if (!isReady || !cofhe) {
+      console.log('[v0] CofheClient not ready for permit check')
+      return false
+    }
+
     try {
-      if (!walletClient || !walletClient.account) {
-        console.log('[v0] No wallet client available for permit check')
-        return false
-      }
-
-      const { CofheClient } = await import('cofhejs')
-      const cofhe = await CofheClient.init({
-        provider: walletClient,
-        chainId: 11155111, // Sepolia
-      })
-
       // Try to check if permit exists
       if (typeof cofhe.hasPermit === 'function') {
         try {
@@ -43,7 +38,7 @@ export function usePermit(walletClient?: WalletClient | null) {
           return permitExists
         } catch (err) {
           console.log('[v0] hasPermit check threw (likely not implemented):', err)
-          // If hasPermit throws, assume no permit and let createPermit handle it
+          // If hasPermit throws, assume no permit
           return false
         }
       }
@@ -55,42 +50,23 @@ export function usePermit(walletClient?: WalletClient | null) {
       setHasPermit(false)
       return false
     }
-  }, [walletClient])
+  }, [cofhe, isReady])
 
   /**
    * Generate and activate a CoFHE permit for the user's wallet
    */
   const generatePermit = useCallback(async () => {
+    if (!isReady || !cofhe) {
+      const msg = 'CofheClient not ready. Ensure wallet is connected.'
+      setError(msg)
+      toast.error(msg)
+      return false
+    }
+
     setIsLoading(true)
     setError(null)
 
     try {
-      if (!walletClient || !walletClient.account) {
-        const msg = 'Wallet not connected or no signer. Reconnect MetaMask.'
-        setError(msg)
-        toast.error(msg)
-        setIsLoading(false)
-        return false
-      }
-
-      const { CofheClient } = await import('cofhejs')
-
-      // Initialize CofheClient with walletClient (must have signer)
-      let cofhe
-      try {
-        cofhe = await CofheClient.init({
-          provider: walletClient,
-          chainId: 11155111, // Sepolia
-        })
-      } catch (initError) {
-        const msg = 'Failed to initialize encryption client'
-        setError(msg)
-        console.log('[v0] CofheClient init error:', initError)
-        toast.error(msg)
-        setIsLoading(false)
-        return false
-      }
-
       // Create permit with 30-day expiration
       const expirationTime = Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60
 
@@ -128,7 +104,7 @@ export function usePermit(walletClient?: WalletClient | null) {
       setIsLoading(false)
       return false
     }
-  }, [walletClient])
+  }, [cofhe, isReady])
 
   return {
     hasPermit,
