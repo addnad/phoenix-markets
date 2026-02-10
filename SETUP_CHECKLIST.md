@@ -94,7 +94,7 @@ NEXT_PUBLIC_CHAIN_ID=11155111  # Default is Sepolia
 
 ## Contract Address
 
-- **0x2ec0aAAc3b6845f1bA5CE5F923301Ec00A4eA296** (Sepolia)
+- **0x939839Ae1588A784E09C2A428db44619F1B1D5f9** (Sepolia)
 - Network: Ethereum Sepolia
 - RPC: https://rpc.sepolia.org
 

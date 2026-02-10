@@ -13,7 +13,7 @@ export const config = createConfig({
   },
 })
 
-export const CONTRACT_ADDRESS = '0x2ec0aAAc3b6845f1bA5CE5F923301Ec00A4eA296' as const
+export const CONTRACT_ADDRESS = '0x939839Ae1588A784E09C2A428db44619F1B1D5f9' as const
 
 export const PREDICTION_MARKET_ABI = [
   {

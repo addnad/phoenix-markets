@@ -3,6 +3,7 @@ import type { Metadata } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import Providers from '@/components/providers'
+import { ThemeProvider } from '@/components/theme-provider'
 import Navbar from '@/components/navbar'
 import './globals.css'
 
@@ -40,14 +41,16 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`font-sans antialiased dark bg-background`}>
-        <Providers>
-          <div className="flex flex-col min-h-screen">
-            <Navbar />
-            <main className="flex-1">
-              {children}
-            </main>
-          </div>
-        </Providers>
+        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
+          <Providers>
+            <div className="flex flex-col min-h-screen">
+              <Navbar />
+              <main className="flex-1">
+                {children}
+              </main>
+            </div>
+          </Providers>
+        </ThemeProvider>
         <Analytics />
       </body>
     </html>
